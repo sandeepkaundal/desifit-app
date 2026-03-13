@@ -204,6 +204,27 @@ export default function HabitsScreen() {
     }
   };
 
+  const handleDeleteHabit = async (habitId: string) => {
+    Alert.alert('Delete Habit', 'Are you sure you want to delete this habit?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const updatedHabits = habits.filter(h => h.id !== habitId);
+            await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
+            setHabits(updatedHabits);
+            Alert.alert('Success', 'Habit deleted');
+          } catch (error) {
+            console.error('Error deleting habit:', error);
+            Alert.alert('Error', 'Failed to delete habit');
+          }
+        },
+      },
+    ]);
+  };
+
   const handleDeleteTodo = async (todoId: string) => {
     Alert.alert('Delete Task', 'Are you sure you want to delete this task?', [
       { text: 'Cancel', style: 'cancel' },
@@ -274,45 +295,52 @@ export default function HabitsScreen() {
             habits.map((habit) => {
               const isCompleted = isHabitCompletedToday(habit);
               return (
-                <TouchableOpacity
-                  key={habit.id}
-                  style={[
-                    styles.habitCard,
-                    isCompleted && styles.habitCardCompleted,
-                  ]}
-                  onPress={() => handleToggleHabit(habit)}
-                >
-                  <View style={styles.habitLeft}>
-                    <View
-                      style={[
-                        styles.checkbox,
-                        isCompleted && styles.checkboxCompleted,
-                      ]}
-                    >
-                      {isCompleted && (
-                        <Ionicons name="checkmark" size={20} color="#ffffff" />
-                      )}
-                    </View>
-                    <View style={styles.habitInfo}>
-                      <Text
+                <View key={habit.id} style={styles.habitCardContainer}>
+                  <TouchableOpacity
+                    style={[
+                      styles.habitCard,
+                      isCompleted && styles.habitCardCompleted,
+                    ]}
+                    onPress={() => handleToggleHabit(habit)}
+                  >
+                    <View style={styles.habitLeft}>
+                      <View
                         style={[
-                          styles.habitName,
-                          isCompleted && styles.habitNameCompleted,
+                          styles.checkbox,
+                          isCompleted && styles.checkboxCompleted,
                         ]}
                       >
-                        {habit.habitName}
-                      </Text>
-                      <Text style={styles.habitStreak}>
-                        {habit.currentStreak > 0
-                          ? `🔥 ${habit.currentStreak} day streak`
-                          : 'Start your streak today!'}
-                      </Text>
+                        {isCompleted && (
+                          <Ionicons name="checkmark" size={20} color="#ffffff" />
+                        )}
+                      </View>
+                      <View style={styles.habitInfo}>
+                        <Text
+                          style={[
+                            styles.habitName,
+                            isCompleted && styles.habitNameCompleted,
+                          ]}
+                        >
+                          {habit.habitName}
+                        </Text>
+                        <Text style={styles.habitStreak}>
+                          {habit.currentStreak > 0
+                            ? `🔥 ${habit.currentStreak} day streak`
+                            : 'Start your streak today!'}
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                  <View style={styles.habitRight}>
-                    <Text style={styles.longestStreak}>Best: {habit.longestStreak}</Text>
-                  </View>
-                </TouchableOpacity>
+                    <View style={styles.habitRight}>
+                      <Text style={styles.longestStreak}>Best: {habit.longestStreak}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => handleDeleteHabit(habit.id)}
+                  >
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  </TouchableOpacity>
+                </View>
               );
             })
           )}
@@ -521,20 +549,31 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 20,
   },
+  habitCardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 8,
+  },
   habitCard: {
+    flex: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     backgroundColor: '#ffffff',
     padding: 16,
     borderRadius: 16,
-    marginBottom: 12,
     borderWidth: 2,
     borderColor: '#e5e7eb',
   },
   habitCardCompleted: {
     borderColor: '#10b981',
     backgroundColor: '#f0fdf4',
+  },
+  deleteButton: {
+    padding: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   habitLeft: {
     flexDirection: 'row',
