@@ -4,10 +4,10 @@ import { useAuthStore } from '../src/store/authStore';
 import { Redirect } from 'expo-router';
 
 export default function Index() {
-  const { user, isLoading, loadUser } = useAuthStore();
+  const { user, isLoading, loadProfile } = useAuthStore();
 
   useEffect(() => {
-    loadUser();
+    loadProfile();
   }, []);
 
   if (isLoading) {
@@ -18,11 +18,12 @@ export default function Index() {
     );
   }
 
-  // Redirect based on auth state
+  // If no user profile exists, show onboarding
   if (!user) {
-    return <Redirect href="/login" />;
+    return <Redirect href="/onboarding" />;
   }
 
+  // If user profile exists, go to dashboard
   return <Redirect href="/dashboard" />;
 }
 

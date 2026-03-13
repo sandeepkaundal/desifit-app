@@ -13,32 +13,35 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/authStore';
-import { api } from '../../src/utils/api';
 import { getTodayString } from '../../src/utils/helpers';
-import { WeightLog } from '../../src/types';
 import { Ionicons } from '@expo/vector-icons';
 import { LineChart } from 'react-native-gifted-charts';
 import { router } from 'expo-router';
 
+// Simple local storage for weight logs
+const WEIGHT_LOGS_KEY = 'weight_logs';
+
 export default function ProfileScreen() {
-  const { user, logout } = useAuthStore();
-  const [weightLogs, setWeightLogs] = useState<WeightLog[]>([]);
+  const { user, updateWeight, updateCalorieGoal, clearProfile } = useAuthStore();
+  const [weightLogs, setWeightLogs] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [weight, setWeight] = useState('');
   const [editGoalModal, setEditGoalModal] = useState(false);
+  const [weight, setWeight] = useState('');
   const [newGoal, setNewGoal] = useState('');
 
   useEffect(() => {
-    fetchWeightLogs();
-  }, [user]);
+    loadWeightLogs();
+  }, []);
 
-  const fetchWeightLogs = async () => {
-    if (!user) return;
+  const loadWeightLogs = async () => {
     try {
-      const data = await api.getWeightLogs(user.id);
-      setWeightLogs(data);
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const logsStr = await AsyncStorage.getItem(WEIGHT_LOGS_KEY);
+      if (logsStr) {
+        setWeightLogs(JSON.parse(logsStr));
+      }
     } catch (error) {
-      console.error('Error fetching weight logs:', error);
+      console.error('Error loading weight logs:', error);
     }
   };
 
@@ -52,38 +55,47 @@ export default function ProfileScreen() {
     }
 
     try {
-      await api.logWeight({
-        userId: user.id,
+      const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+      const newLog = {
+        id: Date.now().toString(),
         weight: weightNum,
         date: getTodayString(),
-      });
+        timestamp: new Date().toISOString(),
+      };
+
+      const updatedLogs = [newLog, ...weightLogs];
+      await AsyncStorage.setItem(WEIGHT_LOGS_KEY, JSON.stringify(updatedLogs));
+      setWeightLogs(updatedLogs);
+      await updateWeight(weightNum);
 
       setModalVisible(false);
       setWeight('');
-      fetchWeightLogs();
       Alert.alert('Success', 'Weight logged successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to log weight');
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
+  const handleResetProfile = () => {
+    Alert.alert('Reset Profile', 'Are you sure? All local data will be cleared.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Logout',
+        text: 'Reset',
         style: 'destructive',
         onPress: async () => {
-          await logout();
-          router.replace('/login');
+          await clearProfile();
+          const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+          await AsyncStorage.removeItem(WEIGHT_LOGS_KEY);
+          await AsyncStorage.removeItem('food_logs');
+          await AsyncStorage.removeItem('exercise_logs');
+          await AsyncStorage.removeItem('habits');
+          router.replace('/onboarding');
         },
       },
     ]);
   };
 
   const handleUpdateGoal = async () => {
-    if (!user) return;
-
     const goalNum = parseFloat(newGoal);
     if (isNaN(goalNum) || goalNum <= 0) {
       Alert.alert('Error', 'Please enter a valid calorie goal');
@@ -91,13 +103,10 @@ export default function ProfileScreen() {
     }
 
     try {
-      await api.updateCalorieGoal(user.id, goalNum);
+      await updateCalorieGoal(goalNum);
       setEditGoalModal(false);
       setNewGoal('');
       Alert.alert('Success', 'Calorie goal updated!');
-      // Refresh user data
-      const updatedUser = await api.getUser(user.id);
-      useAuthStore.getState().setUser(updatedUser);
     } catch (error) {
       Alert.alert('Error', 'Failed to update goal');
     }
@@ -109,7 +118,7 @@ export default function ProfileScreen() {
       ? weightLogs
           .slice(0, 10)
           .reverse()
-          .map((log, index) => ({
+          .map((log) => ({
             value: log.weight,
             label: log.date.substring(5),
             dataPointText: log.weight.toFixed(1),
@@ -121,6 +130,10 @@ export default function ProfileScreen() {
       ? weightLogs[0].weight - weightLogs[weightLogs.length - 1].weight
       : 0;
 
+  if (!user) {
+    return null;
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -129,8 +142,8 @@ export default function ProfileScreen() {
           <View style={styles.avatar}>
             <Ionicons name="person" size={48} color="#10b981" />
           </View>
-          <Text style={styles.name}>{user?.name}</Text>
-          <Text style={styles.phone}>{user?.phone}</Text>
+          <Text style={styles.name}>{user.name}</Text>
+          <Text style={styles.phone}>{user.phone}</Text>
         </View>
 
         {/* Stats Card */}
@@ -139,31 +152,31 @@ export default function ProfileScreen() {
           <View style={styles.statsGrid}>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Age</Text>
-              <Text style={styles.statValue}>{user?.age}</Text>
+              <Text style={styles.statValue}>{user.age}</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Height</Text>
-              <Text style={styles.statValue}>{user?.height} cm</Text>
+              <Text style={styles.statValue}>{user.height} cm</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Current</Text>
-              <Text style={styles.statValue}>{user?.currentWeight} kg</Text>
+              <Text style={styles.statValue}>{user.currentWeight} kg</Text>
             </View>
             <View style={styles.statBox}>
               <Text style={styles.statLabel}>Goal</Text>
-              <Text style={styles.statValue}>{user?.goalWeight} kg</Text>
+              <Text style={styles.statValue}>{user.goalWeight} kg</Text>
             </View>
           </View>
 
           <TouchableOpacity
             style={styles.editGoalButton}
             onPress={() => {
-              setNewGoal(user?.dailyCalorieGoal.toString() || '');
+              setNewGoal(user.dailyCalorieGoal.toString());
               setEditGoalModal(true);
             }}
           >
             <Text style={styles.editGoalText}>
-              Daily Calorie Goal: {Math.round(user?.dailyCalorieGoal || 0)} cal
+              Daily Calorie Goal: {Math.round(user.dailyCalorieGoal)} cal
             </Text>
             <Ionicons name="pencil" size={16} color="#10b981" />
           </TouchableOpacity>
@@ -237,11 +250,13 @@ export default function ProfileScreen() {
           )}
         </View>
 
-        {/* Logout Button */}
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-          <Ionicons name="log-out-outline" size={20} color="#ef4444" />
-          <Text style={styles.logoutText}>Logout</Text>
+        {/* Reset Button */}
+        <TouchableOpacity style={styles.logoutButton} onPress={handleResetProfile}>
+          <Ionicons name="refresh-outline" size={20} color="#ef4444" />
+          <Text style={styles.logoutText}>Reset Profile</Text>
         </TouchableOpacity>
+
+        <Text style={styles.footerNote}>All data is stored locally on your device</Text>
       </ScrollView>
 
       {/* Log Weight Modal */}
@@ -488,12 +503,18 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     gap: 8,
-    marginBottom: 32,
+    marginBottom: 16,
   },
   logoutText: {
     fontSize: 16,
     fontWeight: '600',
     color: '#ef4444',
+  },
+  footerNote: {
+    fontSize: 12,
+    color: '#9ca3af',
+    textAlign: 'center',
+    marginBottom: 32,
   },
   modalContainer: {
     flex: 1,
