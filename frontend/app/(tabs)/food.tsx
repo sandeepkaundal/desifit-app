@@ -14,21 +14,39 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/authStore';
-import { api } from '../../src/utils/api';
 import { getTodayString } from '../../src/utils/helpers';
-import { Food, FoodLog } from '../../src/types';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Pre-populated Indian foods database
+const INDIAN_FOODS = [
+  { id: '1', name: 'Roti (Chapati)', calories: 70, servingSize: '1 piece' },
+  { id: '2', name: 'Rice (Cooked)', calories: 130, servingSize: '100g' },
+  { id: '3', name: 'Dal (Cooked)', calories: 100, servingSize: '100g' },
+  { id: '4', name: 'Paneer Sabzi', calories: 180, servingSize: '100g' },
+  { id: '5', name: 'Poha', calories: 160, servingSize: '100g' },
+  { id: '6', name: 'Idli', calories: 39, servingSize: '1 piece' },
+  { id: '7', name: 'Dosa', calories: 120, servingSize: '1 piece' },
+  { id: '8', name: 'Rajma', calories: 140, servingSize: '100g' },
+  { id: '9', name: 'Chole', calories: 164, servingSize: '100g' },
+  { id: '10', name: 'Paratha', calories: 300, servingSize: '1 piece' },
+  { id: '11', name: 'Sambar', calories: 80, servingSize: '100g' },
+  { id: '12', name: 'Upma', calories: 150, servingSize: '100g' },
+  { id: '13', name: 'Aloo Sabzi', calories: 130, servingSize: '100g' },
+  { id: '14', name: 'Biryani', calories: 200, servingSize: '100g' },
+  { id: '15', name: 'Khichdi', calories: 120, servingSize: '100g' },
+];
 
 export default function FoodScreen() {
   const { user } = useAuthStore();
-  const [foods, setFoods] = useState<Food[]>([]);
-  const [foodLogs, setFoodLogs] = useState<FoodLog[]>([]);
+  const [foods, setFoods] = useState<any[]>([]);
+  const [foodLogs, setFoodLogs] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [modalVisible, setModalVisible] = useState(false);
   const [addFoodModal, setAddFoodModal] = useState(false);
-  const [selectedFood, setSelectedFood] = useState<Food | null>(null);
+  const [selectedFood, setSelectedFood] = useState<any>(null);
   const [quantity, setQuantity] = useState('1');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   
   // Add custom food states
   const [customName, setCustomName] = useState('');
@@ -36,45 +54,57 @@ export default function FoodScreen() {
   const [customServing, setCustomServing] = useState('100g');
 
   useEffect(() => {
-    fetchFoods();
-    fetchFoodLogs();
-  }, [user]);
+    loadFoods();
+    loadFoodLogs();
+  }, []);
 
-  const fetchFoods = async () => {
-    if (!user) return;
+  const loadFoods = async () => {
     try {
-      const data = await api.getFoods(user.id, search);
-      setFoods(data);
+      // Load custom foods from storage
+      const customFoodsStr = await AsyncStorage.getItem('custom_foods');
+      const customFoods = customFoodsStr ? JSON.parse(customFoodsStr) : [];
+      
+      // Combine with pre-populated foods
+      const allFoods = [...INDIAN_FOODS, ...customFoods];
+      
+      // Filter by search
+      if (search.trim()) {
+        const filtered = allFoods.filter(food => 
+          food.name.toLowerCase().includes(search.toLowerCase())
+        );
+        setFoods(filtered);
+      } else {
+        setFoods(allFoods);
+      }
     } catch (error) {
-      console.error('Error fetching foods:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error loading foods:', error);
     }
   };
 
-  const fetchFoodLogs = async () => {
-    if (!user) return;
+  const loadFoodLogs = async () => {
     try {
-      const data = await api.getFoodLogs(user.id, getTodayString());
-      setFoodLogs(data);
+      const logsStr = await AsyncStorage.getItem('food_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+      const today = getTodayString();
+      const todayLogs = allLogs.filter((log: any) => log.date === today);
+      setFoodLogs(todayLogs);
     } catch (error) {
-      console.error('Error fetching food logs:', error);
+      console.error('Error loading food logs:', error);
     }
   };
 
   const handleSearch = () => {
-    setLoading(true);
-    fetchFoods();
+    loadFoods();
   };
 
-  const handleSelectFood = (food: Food) => {
+  const handleSelectFood = (food: any) => {
     setSelectedFood(food);
     setQuantity('1');
     setModalVisible(true);
   };
 
   const handleLogFood = async () => {
-    if (!user || !selectedFood) return;
+    if (!selectedFood) return;
     
     const qty = parseFloat(quantity);
     if (isNaN(qty) || qty <= 0) {
@@ -83,62 +113,104 @@ export default function FoodScreen() {
     }
 
     try {
-      await api.logFood({
-        userId: user.id,
-        foodId: selectedFood.id,
-        foodName: selectedFood.name,
-        quantity: qty,
-        calories: selectedFood.calories * qty,
-        date: getTodayString(),
-      });
+      // Calculate total calories: Food Calories × Quantity
+      const totalCalories = selectedFood.calories * qty;
       
+      const newLog = {
+        id: Date.now().toString(),
+        foodName: selectedFood.name,
+        caloriesPerUnit: selectedFood.calories,
+        servingSize: selectedFood.servingSize,
+        quantity: qty,
+        totalCalories: totalCalories,
+        date: getTodayString(),
+        timestamp: new Date().toISOString(),
+      };
+
+      // Load existing logs
+      const logsStr = await AsyncStorage.getItem('food_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+      
+      // Add new log
+      allLogs.unshift(newLog);
+      
+      // Save back to storage
+      await AsyncStorage.setItem('food_logs', JSON.stringify(allLogs));
+      
+      // Update UI
+      loadFoodLogs();
       setModalVisible(false);
-      fetchFoodLogs();
-      Alert.alert('Success', 'Food logged successfully!');
+      setQuantity('1');
+      
+      Alert.alert('Success', `Logged ${qty}x ${selectedFood.name} (${Math.round(totalCalories)} cal)`);
     } catch (error) {
+      console.error('Error logging food:', error);
       Alert.alert('Error', 'Failed to log food');
     }
   };
 
   const handleAddCustomFood = async () => {
-    if (!user) return;
-    
     if (!customName.trim() || !customCalories) {
       Alert.alert('Error', 'Please fill all fields');
       return;
     }
 
     try {
-      await api.createFood({
-        name: customName,
+      const newFood = {
+        id: `custom_${Date.now()}`,
+        name: customName.trim(),
         calories: parseFloat(customCalories),
-        servingSize: customServing,
-        category: 'custom',
+        servingSize: customServing.trim(),
         isCustom: true,
-        userId: user.id,
-      });
+      };
+
+      // Load existing custom foods
+      const customFoodsStr = await AsyncStorage.getItem('custom_foods');
+      const customFoods = customFoodsStr ? JSON.parse(customFoodsStr) : [];
       
+      // Add new food
+      customFoods.push(newFood);
+      
+      // Save back
+      await AsyncStorage.setItem('custom_foods', JSON.stringify(customFoods));
+      
+      // Reset form
       setAddFoodModal(false);
       setCustomName('');
       setCustomCalories('');
       setCustomServing('100g');
-      fetchFoods();
+      
+      // Reload foods
+      loadFoods();
+      
       Alert.alert('Success', 'Custom food added!');
     } catch (error) {
+      console.error('Error adding custom food:', error);
       Alert.alert('Error', 'Failed to add food');
     }
   };
 
   const handleDeleteLog = async (logId: string) => {
     try {
-      await api.deleteFoodLog(logId);
-      fetchFoodLogs();
+      const logsStr = await AsyncStorage.getItem('food_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+      
+      // Remove the log
+      const updatedLogs = allLogs.filter((log: any) => log.id !== logId);
+      
+      // Save back
+      await AsyncStorage.setItem('food_logs', JSON.stringify(updatedLogs));
+      
+      // Update UI
+      loadFoodLogs();
     } catch (error) {
+      console.error('Error deleting log:', error);
       Alert.alert('Error', 'Failed to delete log');
     }
   };
 
-  const totalCalories = foodLogs.reduce((sum, log) => sum + log.calories, 0);
+  // Calculate total calories for today
+  const totalCalories = foodLogs.reduce((sum, log) => sum + (log.totalCalories || 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -156,6 +228,7 @@ export default function FoodScreen() {
       <View style={styles.totalCard}>
         <Text style={styles.totalLabel}>Today's Calories</Text>
         <Text style={styles.totalValue}>{Math.round(totalCalories)} cal</Text>
+        <Text style={styles.totalSubtext}>{foodLogs.length} items logged</Text>
       </View>
 
       {/* Search */}
@@ -183,7 +256,7 @@ export default function FoodScreen() {
               <View style={styles.logInfo}>
                 <Text style={styles.logName}>{log.foodName}</Text>
                 <Text style={styles.logDetails}>
-                  Quantity: {log.quantity}x • {Math.round(log.calories)} cal
+                  {log.quantity}x {log.servingSize} • {log.caloriesPerUnit} cal/unit = {Math.round(log.totalCalories)} cal total
                 </Text>
               </View>
               <TouchableOpacity onPress={() => handleDeleteLog(log.id)}>
@@ -197,6 +270,8 @@ export default function FoodScreen() {
         <Text style={styles.sectionTitle}>Available Foods</Text>
         {loading ? (
           <ActivityIndicator size="large" color="#10b981" />
+        ) : foods.length === 0 ? (
+          <Text style={styles.emptyText}>No foods found</Text>
         ) : (
           foods.map((food) => (
             <TouchableOpacity
@@ -235,17 +310,21 @@ export default function FoodScreen() {
               {selectedFood?.calories} cal per {selectedFood?.servingSize}
             </Text>
 
+            <Text style={styles.inputLabel}>Quantity</Text>
             <TextInput
               style={styles.input}
-              placeholder="Quantity"
+              placeholder="Enter quantity (e.g., 2)"
               value={quantity}
               onChangeText={setQuantity}
               keyboardType="decimal-pad"
             />
 
-            <Text style={styles.totalCalText}>
-              Total: {Math.round((selectedFood?.calories || 0) * parseFloat(quantity || '0'))} calories
-            </Text>
+            <View style={styles.calculationBox}>
+              <Text style={styles.calculationLabel}>Total Calories:</Text>
+              <Text style={styles.calculationValue}>
+                {selectedFood?.calories} × {quantity || 0} = {Math.round((selectedFood?.calories || 0) * parseFloat(quantity || '0'))} cal
+              </Text>
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -279,24 +358,27 @@ export default function FoodScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Custom Food</Text>
 
+            <Text style={styles.inputLabel}>Food Name</Text>
             <TextInput
               style={styles.input}
-              placeholder="Food Name"
+              placeholder="e.g., Homemade Dal"
               value={customName}
               onChangeText={setCustomName}
             />
 
+            <Text style={styles.inputLabel}>Calories per Serving</Text>
             <TextInput
               style={styles.input}
-              placeholder="Calories"
+              placeholder="e.g., 150"
               value={customCalories}
               onChangeText={setCustomCalories}
               keyboardType="decimal-pad"
             />
 
+            <Text style={styles.inputLabel}>Serving Size</Text>
             <TextInput
               style={styles.input}
-              placeholder="Serving Size (e.g., 100g, 1 piece)"
+              placeholder="e.g., 100g or 1 bowl"
               value={customServing}
               onChangeText={setCustomServing}
             />
@@ -360,6 +442,12 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     marginTop: 8,
   },
+  totalSubtext: {
+    fontSize: 14,
+    color: '#ffffff',
+    opacity: 0.8,
+    marginTop: 4,
+  },
   searchContainer: {
     flexDirection: 'row',
     paddingHorizontal: 16,
@@ -417,7 +505,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   logDetails: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
     marginTop: 4,
   },
@@ -453,7 +541,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    minHeight: 300,
+    minHeight: 400,
   },
   modalTitle: {
     fontSize: 24,
@@ -472,6 +560,12 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     marginBottom: 24,
   },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: '#f3f4f6',
     borderRadius: 12,
@@ -481,12 +575,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  totalCalText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10b981',
-    textAlign: 'center',
+  calculationBox: {
+    backgroundColor: '#f0fdf4',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#10b981',
+  },
+  calculationLabel: {
+    fontSize: 14,
+    color: '#059669',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  calculationValue: {
+    fontSize: 18,
+    color: '#047857',
+    fontWeight: 'bold',
   },
   modalButtons: {
     flexDirection: 'row',
