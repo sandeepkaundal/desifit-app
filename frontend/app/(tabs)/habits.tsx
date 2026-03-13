@@ -16,11 +16,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEFAULT_HABITS = [
   { name: 'Drink Water', icon: 'water' },
-  { name: 'Walking Steps', icon: 'walk' },
+  { name: 'Walk 8000 Steps', icon: 'walk' },
   { name: 'Workout', icon: 'barbell' },
-  { name: 'Avoid Sugar', icon: 'fast-food' },
+  { name: 'Sleep before 11', icon: 'moon' },
   { name: 'Eat Vegetables', icon: 'leaf' },
-  { name: 'Sleep Early', icon: 'moon' },
+  { name: 'Avoid Sugar', icon: 'fast-food' },
 ];
 
 const calculateStreaks = (completedDates: string[]): { current: number; longest: number } => {
@@ -29,7 +29,6 @@ const calculateStreaks = (completedDates: string[]): { current: number; longest:
   const sorted = completedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
   const today = getTodayString();
   
-  // Calculate current streak
   let currentStreak = 0;
   const todayDate = new Date(today);
   
@@ -45,7 +44,6 @@ const calculateStreaks = (completedDates: string[]): { current: number; longest:
     }
   }
   
-  // Calculate longest streak
   let longestStreak = 1;
   let tempStreak = 1;
   
@@ -68,11 +66,14 @@ const calculateStreaks = (completedDates: string[]): { current: number; longest:
 
 export default function HabitsScreen() {
   const [habits, setHabits] = useState<any[]>([]);
+  const [todos, setTodos] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [customHabit, setCustomHabit] = useState('');
+  const [modalType, setModalType] = useState<'habit' | 'todo'>('habit');
+  const [customInput, setCustomInput] = useState('');
 
   useEffect(() => {
     loadHabits();
+    loadTodos();
   }, []);
 
   const loadHabits = async () => {
@@ -85,8 +86,17 @@ export default function HabitsScreen() {
     }
   };
 
+  const loadTodos = async () => {
+    try {
+      const todosStr = await AsyncStorage.getItem('todos');
+      const loadedTodos = todosStr ? JSON.parse(todosStr) : [];
+      setTodos(loadedTodos);
+    } catch (error) {
+      console.error('Error loading todos:', error);
+    }
+  };
+
   const handleAddHabit = async (habitName: string) => {
-    // Check if habit already exists
     if (habits.find(h => h.habitName === habitName)) {
       Alert.alert('Info', 'This habit already exists!');
       return;
@@ -96,6 +106,7 @@ export default function HabitsScreen() {
       const newHabit = {
         id: Date.now().toString(),
         habitName,
+        type: 'habit',
         completedDates: [],
         currentStreak: 0,
         longestStreak: 0,
@@ -106,10 +117,37 @@ export default function HabitsScreen() {
       
       setHabits(updatedHabits);
       setModalVisible(false);
-      setCustomHabit('');
+      setCustomInput('');
     } catch (error) {
       console.error('Error adding habit:', error);
       Alert.alert('Error', 'Failed to add habit');
+    }
+  };
+
+  const handleAddTodo = async (taskName: string) => {
+    if (!taskName.trim()) {
+      Alert.alert('Error', 'Please enter a task name');
+      return;
+    }
+
+    try {
+      const newTodo = {
+        id: Date.now().toString(),
+        taskName: taskName.trim(),
+        type: 'todo',
+        completed: false,
+        createdDate: getTodayString(),
+      };
+
+      const updatedTodos = [...todos, newTodo];
+      await AsyncStorage.setItem('todos', JSON.stringify(updatedTodos));
+      
+      setTodos(updatedTodos);
+      setModalVisible(false);
+      setCustomInput('');
+    } catch (error) {
+      console.error('Error adding todo:', error);
+      Alert.alert('Error', 'Failed to add task');
     }
   };
 
@@ -146,78 +184,206 @@ export default function HabitsScreen() {
     }
   };
 
+  const handleToggleTodo = async (todo: any) => {
+    try {
+      const updatedTodo = {
+        ...todo,
+        completed: !todo.completed,
+        completedDate: !todo.completed ? getTodayString() : null,
+      };
+
+      const updatedTodos = todos.map(t => 
+        t.id === todo.id ? updatedTodo : t
+      );
+
+      await AsyncStorage.setItem('todos', JSON.stringify(updatedTodos));
+      setTodos(updatedTodos);
+    } catch (error) {
+      console.error('Error toggling todo:', error);
+      Alert.alert('Error', 'Failed to update task');
+    }
+  };
+
+  const handleDeleteTodo = async (todoId: string) => {
+    Alert.alert('Delete Task', 'Are you sure you want to delete this task?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const updatedTodos = todos.filter(t => t.id !== todoId);
+            await AsyncStorage.setItem('todos', JSON.stringify(updatedTodos));
+            setTodos(updatedTodos);
+          } catch (error) {
+            console.error('Error deleting todo:', error);
+            Alert.alert('Error', 'Failed to delete task');
+          }
+        },
+      },
+    ]);
+  };
+
   const isHabitCompletedToday = (habit: any) => {
     return habit.completedDates.includes(getTodayString());
   };
 
+  const openAddModal = (type: 'habit' | 'todo') => {
+    setModalType(type);
+    setCustomInput('');
+    setModalVisible(true);
+  };
+
+  // Calculate today's completion for dashboard
+  const todayHabitsCompleted = habits.filter(h => isHabitCompletedToday(h)).length;
+  const todayTodosCompleted = todos.filter(t => t.completed).length;
+  const totalTasksToday = habits.length + todos.filter(t => !t.completed).length;
+  const totalCompletedToday = todayHabitsCompleted + todayTodosCompleted;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Habit Tracker</Text>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <Ionicons name="add-circle" size={32} color="#10b981" />
-        </TouchableOpacity>
+        <View>
+          <Text style={styles.title}>Tasks & Habits</Text>
+          <Text style={styles.subtitle}>
+            {totalCompletedToday}/{totalTasksToday} completed today
+          </Text>
+        </View>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {habits.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="checkmark-circle-outline" size={64} color="#d1d5db" />
-            <Text style={styles.emptyText}>No habits yet!</Text>
-            <Text style={styles.emptySubtext}>Tap + to add your first habit</Text>
+        {/* Health Habits Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="fitness" size={20} color="#10b981" />
+              <Text style={styles.sectionTitle}>Health Habits</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addIconButton}
+              onPress={() => openAddModal('habit')}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#10b981" />
+            </TouchableOpacity>
           </View>
-        ) : (
-          habits.map((habit) => {
-            const isCompleted = isHabitCompletedToday(habit);
-            return (
-              <TouchableOpacity
-                key={habit.id}
-                style={[
-                  styles.habitCard,
-                  isCompleted && styles.habitCardCompleted,
-                ]}
-                onPress={() => handleToggleHabit(habit)}
-              >
-                <View style={styles.habitLeft}>
-                  <View
-                    style={[
-                      styles.checkbox,
-                      isCompleted && styles.checkboxCompleted,
-                    ]}
-                  >
-                    {isCompleted && (
-                      <Ionicons name="checkmark" size={20} color="#ffffff" />
-                    )}
-                  </View>
-                  <View style={styles.habitInfo}>
-                    <Text
+          <Text style={styles.sectionDesc}>Daily habits that reset every day</Text>
+
+          {habits.length === 0 ? (
+            <Text style={styles.emptyText}>No health habits yet. Tap + to add one!</Text>
+          ) : (
+            habits.map((habit) => {
+              const isCompleted = isHabitCompletedToday(habit);
+              return (
+                <TouchableOpacity
+                  key={habit.id}
+                  style={[
+                    styles.habitCard,
+                    isCompleted && styles.habitCardCompleted,
+                  ]}
+                  onPress={() => handleToggleHabit(habit)}
+                >
+                  <View style={styles.habitLeft}>
+                    <View
                       style={[
-                        styles.habitName,
-                        isCompleted && styles.habitNameCompleted,
+                        styles.checkbox,
+                        isCompleted && styles.checkboxCompleted,
                       ]}
                     >
-                      {habit.habitName}
-                    </Text>
-                    <Text style={styles.habitStreak}>
-                      {habit.currentStreak > 0
-                        ? `🔥 ${habit.currentStreak} day streak`
-                        : 'Start your streak today!'}
-                    </Text>
+                      {isCompleted && (
+                        <Ionicons name="checkmark" size={20} color="#ffffff" />
+                      )}
+                    </View>
+                    <View style={styles.habitInfo}>
+                      <Text
+                        style={[
+                          styles.habitName,
+                          isCompleted && styles.habitNameCompleted,
+                        ]}
+                      >
+                        {habit.habitName}
+                      </Text>
+                      <Text style={styles.habitStreak}>
+                        {habit.currentStreak > 0
+                          ? `🔥 ${habit.currentStreak} day streak`
+                          : 'Start your streak today!'}
+                      </Text>
+                    </View>
                   </View>
+                  <View style={styles.habitRight}>
+                    <Text style={styles.longestStreak}>Best: {habit.longestStreak}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+
+        {/* Personal To-Do List Section */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="list" size={20} color="#3b82f6" />
+              <Text style={styles.sectionTitle}>Personal To-Do List</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.addIconButton}
+              onPress={() => openAddModal('todo')}
+            >
+              <Ionicons name="add-circle-outline" size={24} color="#3b82f6" />
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.sectionDesc}>Tasks that stay until completed</Text>
+
+          {todos.length === 0 ? (
+            <Text style={styles.emptyText}>No tasks yet. Tap + to add a task!</Text>
+          ) : (
+            <>
+              {/* Active Tasks */}
+              {todos.filter(t => !t.completed).map((todo) => (
+                <View key={todo.id} style={styles.todoCard}>
+                  <TouchableOpacity
+                    style={styles.todoLeft}
+                    onPress={() => handleToggleTodo(todo)}
+                  >
+                    <View style={styles.todoCheckbox}>
+                      <Ionicons name="square-outline" size={24} color="#6b7280" />
+                    </View>
+                    <Text style={styles.todoName}>{todo.taskName}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleDeleteTodo(todo.id)}>
+                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                  </TouchableOpacity>
                 </View>
-                <View style={styles.habitRight}>
-                  <Text style={styles.longestStreak}>Best: {habit.longestStreak}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })
-        )}
+              ))}
+
+              {/* Completed Tasks */}
+              {todos.filter(t => t.completed).length > 0 && (
+                <>
+                  <Text style={styles.completedHeader}>Completed</Text>
+                  {todos.filter(t => t.completed).map((todo) => (
+                    <View key={todo.id} style={styles.todoCardCompleted}>
+                      <TouchableOpacity
+                        style={styles.todoLeft}
+                        onPress={() => handleToggleTodo(todo)}
+                      >
+                        <View style={styles.todoCheckbox}>
+                          <Ionicons name="checkmark-square" size={24} color="#10b981" />
+                        </View>
+                        <Text style={styles.todoNameCompleted}>{todo.taskName}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity onPress={() => handleDeleteTodo(todo.id)}>
+                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
 
-      {/* Add Habit Modal */}
+      {/* Add Task/Habit Modal */}
       <Modal
         visible={modalVisible}
         transparent
@@ -226,28 +392,39 @@ export default function HabitsScreen() {
       >
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Habit</Text>
+            <Text style={styles.modalTitle}>
+              {modalType === 'habit' ? 'Add Health Habit' : 'Add To-Do Task'}
+            </Text>
 
-            <Text style={styles.sectionLabel}>Popular Habits</Text>
-            <View style={styles.defaultHabits}>
-              {DEFAULT_HABITS.map((habit) => (
-                <TouchableOpacity
-                  key={habit.name}
-                  style={styles.defaultHabitButton}
-                  onPress={() => handleAddHabit(habit.name)}
-                >
-                  <Ionicons name={habit.icon as any} size={20} color="#10b981" />
-                  <Text style={styles.defaultHabitText}>{habit.name}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {modalType === 'habit' && (
+              <>
+                <Text style={styles.sectionLabel}>Popular Habits</Text>
+                <View style={styles.defaultHabits}>
+                  {DEFAULT_HABITS.map((habit) => (
+                    <TouchableOpacity
+                      key={habit.name}
+                      style={styles.defaultHabitButton}
+                      onPress={() => handleAddHabit(habit.name)}
+                    >
+                      <Ionicons name={habit.icon as any} size={20} color="#10b981" />
+                      <Text style={styles.defaultHabitText}>{habit.name}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
 
-            <Text style={styles.sectionLabel}>Custom Habit</Text>
+                <Text style={styles.sectionLabel}>Custom Habit</Text>
+              </>
+            )}
+
             <TextInput
               style={styles.input}
-              placeholder="Enter habit name"
-              value={customHabit}
-              onChangeText={setCustomHabit}
+              placeholder={
+                modalType === 'habit'
+                  ? 'Enter habit name'
+                  : 'Enter task description'
+              }
+              value={customInput}
+              onChangeText={setCustomInput}
             />
 
             <View style={styles.modalButtons}>
@@ -255,7 +432,7 @@ export default function HabitsScreen() {
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setModalVisible(false);
-                  setCustomHabit('');
+                  setCustomInput('');
                 }}
               >
                 <Text style={styles.cancelButtonText}>Cancel</Text>
@@ -263,14 +440,20 @@ export default function HabitsScreen() {
               <TouchableOpacity
                 style={[styles.modalButton, styles.confirmButton]}
                 onPress={() => {
-                  if (customHabit.trim()) {
-                    handleAddHabit(customHabit.trim());
+                  if (modalType === 'habit') {
+                    if (customInput.trim()) {
+                      handleAddHabit(customInput.trim());
+                    } else {
+                      Alert.alert('Error', 'Please enter a habit name');
+                    }
                   } else {
-                    Alert.alert('Error', 'Please enter a habit name');
+                    handleAddTodo(customInput);
                   }
                 }}
               >
-                <Text style={styles.confirmButtonText}>Add Custom</Text>
+                <Text style={styles.confirmButtonText}>
+                  {modalType === 'habit' ? 'Add Habit' : 'Add Task'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -296,27 +479,47 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1f2937',
   },
-  addButton: {
-    padding: 4,
+  subtitle: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 4,
   },
   content: {
     flex: 1,
     paddingHorizontal: 16,
   },
-  emptyContainer: {
+  section: {
+    marginBottom: 24,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 80,
+    marginBottom: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+  },
+  sectionDesc: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginBottom: 12,
+  },
+  addIconButton: {
+    padding: 4,
   },
   emptyText: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#6b7280',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 16,
+    fontSize: 14,
     color: '#9ca3af',
-    marginTop: 8,
+    textAlign: 'center',
+    marginVertical: 20,
   },
   habitCard: {
     flexDirection: 'row',
@@ -374,6 +577,54 @@ const styles = StyleSheet.create({
   longestStreak: {
     fontSize: 12,
     color: '#6b7280',
+  },
+  todoCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  todoCardCompleted: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f9fafb',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+  },
+  todoLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  todoCheckbox: {
+    marginRight: 12,
+  },
+  todoName: {
+    fontSize: 16,
+    color: '#1f2937',
+    flex: 1,
+  },
+  todoNameCompleted: {
+    fontSize: 16,
+    color: '#9ca3af',
+    textDecorationLine: 'line-through',
+    flex: 1,
+  },
+  completedHeader: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6b7280',
+    marginTop: 16,
+    marginBottom: 8,
   },
   modalContainer: {
     flex: 1,

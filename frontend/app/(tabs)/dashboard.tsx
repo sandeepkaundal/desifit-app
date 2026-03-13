@@ -41,10 +41,25 @@ export default function DashboardScreen() {
       // Get habits
       const habitsStr = await AsyncStorage.getItem('habits');
       const habits = habitsStr ? JSON.parse(habitsStr) : [];
-      const totalHabits = habits.length;
+      
+      // Get todos
+      const todosStr = await AsyncStorage.getItem('todos');
+      const todos = todosStr ? JSON.parse(todosStr) : [];
+      
+      // Calculate habit completion for today
       const habitsCompleted = habits.filter((habit: any) => 
         habit.completedDates && habit.completedDates.includes(today)
       ).length;
+      
+      // Calculate todo completion (all completed todos count)
+      const todosCompleted = todos.filter((todo: any) => todo.completed).length;
+      
+      // Total tasks = all habits + incomplete todos
+      const incompleteTodos = todos.filter((todo: any) => !todo.completed).length;
+      const totalTasks = habits.length + incompleteTodos;
+      
+      // Total completed = habits completed today + todos completed
+      const totalCompleted = habitsCompleted + todosCompleted;
       
       // Get weight logs
       const weightLogsStr = await AsyncStorage.getItem('weight_logs');
@@ -58,8 +73,8 @@ export default function DashboardScreen() {
         caloriesBurned,
         dailyCalorieGoal: user.dailyCalorieGoal,
         remainingCalories: user.dailyCalorieGoal - caloriesConsumed + caloriesBurned,
-        habitsCompleted,
-        totalHabits,
+        habitsCompleted: totalCompleted,
+        totalHabits: totalTasks,
         currentWeight: user.currentWeight,
         goalWeight: user.goalWeight,
         weightChange,
