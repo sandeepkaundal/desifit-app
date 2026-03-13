@@ -11,7 +11,7 @@ from datetime import datetime, date
 from typing import Dict, Any, Optional
 
 # Backend URL from environment
-BACKEND_URL = "https://desi-wellness.preview.emergentagent.com/api"
+BACKEND_URL = "https://health-score-desi.preview.emergentagent.com/api"
 
 class DesiFitAPITester:
     def __init__(self):

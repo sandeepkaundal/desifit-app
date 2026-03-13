@@ -13,6 +13,51 @@ import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LineChart } from 'react-native-gifted-charts';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Circle } from 'react-native-svg';
+
+// Circular Progress Component
+const CircularProgress = ({ score, size = 100, strokeWidth = 10 }: { score: number; size?: number; strokeWidth?: number }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const progress = Math.min(100, Math.max(0, score)) / 100;
+  const strokeDashoffset = circumference * (1 - progress);
+  
+  const getScoreColor = () => {
+    if (score >= 80) return '#10b981';
+    if (score >= 60) return '#f59e0b';
+    if (score >= 40) return '#f97316';
+    return '#ef4444';
+  };
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#e5e7eb"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={getScoreColor()}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 24, fontWeight: 'bold', color: getScoreColor() }}>{score}</Text>
+      </View>
+    </View>
+  );
+};
 
 export default function ProgressScreen() {
   const { user } = useAuthStore();
@@ -34,16 +79,33 @@ export default function ProgressScreen() {
         return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
       };
 
+      // Helper to check if date is in last 7 days
+      const isLastWeek = (dateStr: string) => {
+        const date = new Date(dateStr);
+        const today = new Date();
+        const weekAgo = new Date(today);
+        weekAgo.setDate(today.getDate() - 7);
+        return date >= weekAgo && date <= today;
+      };
+
       // Get all logs from AsyncStorage
       const foodLogsStr = await AsyncStorage.getItem('food_logs');
       const exerciseLogsStr = await AsyncStorage.getItem('exercise_logs');
       const weightLogsStr = await AsyncStorage.getItem('weight_logs');
       const habitsStr = await AsyncStorage.getItem('habits');
+      const fitnessScoresStr = await AsyncStorage.getItem('fitness_scores');
 
       const allFoodLogs = foodLogsStr ? JSON.parse(foodLogsStr) : [];
       const allExerciseLogs = exerciseLogsStr ? JSON.parse(exerciseLogsStr) : [];
       const allWeightLogs = weightLogsStr ? JSON.parse(weightLogsStr) : [];
       const habits = habitsStr ? JSON.parse(habitsStr) : [];
+      const allFitnessScores = fitnessScoresStr ? JSON.parse(fitnessScoresStr) : [];
+
+      // Calculate weekly average fitness score
+      const weeklyScores = allFitnessScores.filter((s: any) => isLastWeek(s.date));
+      const weeklyAverageScore = weeklyScores.length > 0
+        ? Math.round(weeklyScores.reduce((sum: number, s: any) => sum + s.score, 0) / weeklyScores.length)
+        : 0;
 
       // Filter for current month
       const monthFoodLogs = allFoodLogs.filter((log: any) => isCurrentMonth(log.date));
@@ -105,6 +167,8 @@ export default function ProgressScreen() {
         habitCompletionPercentage,
         chartData,
         daysInMonth,
+        weeklyAverageScore,
+        weeklyScoresCount: weeklyScores.length,
       });
     } catch (error) {
       console.error('Error fetching monthly progress:', error);
@@ -162,6 +226,34 @@ export default function ProgressScreen() {
           <Text style={styles.title}>Monthly Progress</Text>
         </View>
         <Text style={styles.subtitle}>{monthName}</Text>
+
+        {/* Weekly Fitness Score Card */}
+        <View style={styles.weeklyScoreCard}>
+          <View style={styles.weeklyScoreHeader}>
+            <Ionicons name="trophy" size={24} color="#f59e0b" />
+            <Text style={styles.weeklyScoreTitle}>Weekly Fitness Score</Text>
+          </View>
+          <View style={styles.weeklyScoreContent}>
+            <CircularProgress score={monthlyData.weeklyAverageScore || 0} />
+            <View style={styles.weeklyScoreInfo}>
+              <Text style={styles.weeklyScoreLabel}>7-Day Average</Text>
+              <Text style={styles.weeklyScoreSubtext}>
+                Based on {monthlyData.weeklyScoresCount || 0} day{monthlyData.weeklyScoresCount !== 1 ? 's' : ''} of data
+              </Text>
+              <Text style={styles.weeklyScoreHint}>
+                {(monthlyData.weeklyAverageScore || 0) >= 80
+                  ? '🏆 Outstanding consistency!'
+                  : (monthlyData.weeklyAverageScore || 0) >= 60
+                  ? '💪 Good work this week!'
+                  : (monthlyData.weeklyAverageScore || 0) >= 40
+                  ? '📈 Building momentum!'
+                  : monthlyData.weeklyScoresCount > 0
+                  ? '🌱 Keep going, you got this!'
+                  : '📊 Log activities to track your score'}
+              </Text>
+            </View>
+          </View>
+        </View>
 
         {/* Weight Progress Card */}
         <View style={styles.card}>
@@ -353,6 +445,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     marginBottom: 24,
+  },
+  weeklyScoreCard: {
+    backgroundColor: '#fffbeb',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  weeklyScoreHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  weeklyScoreTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#92400e',
+  },
+  weeklyScoreContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  weeklyScoreInfo: {
+    flex: 1,
+  },
+  weeklyScoreLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 4,
+  },
+  weeklyScoreSubtext: {
+    fontSize: 13,
+    color: '#6b7280',
+    marginBottom: 8,
+  },
+  weeklyScoreHint: {
+    fontSize: 14,
+    color: '#b45309',
+    fontWeight: '500',
   },
   card: {
     backgroundColor: '#ffffff',

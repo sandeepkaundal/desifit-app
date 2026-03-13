@@ -13,6 +13,55 @@ import { getTodayString } from '../../src/utils/helpers';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
+import Svg, { Circle } from 'react-native-svg';
+
+// Circular Progress Component
+const CircularProgress = ({ score, size = 140, strokeWidth = 12 }: { score: number; size?: number; strokeWidth?: number }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const progress = Math.min(100, Math.max(0, score)) / 100;
+  const strokeDashoffset = circumference * (1 - progress);
+  
+  // Color based on score
+  const getScoreColor = () => {
+    if (score >= 80) return '#10b981'; // Green
+    if (score >= 60) return '#f59e0b'; // Amber
+    if (score >= 40) return '#f97316'; // Orange
+    return '#ef4444'; // Red
+  };
+
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
+        {/* Background Circle */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke="#e5e7eb"
+          strokeWidth={strokeWidth}
+          fill="transparent"
+        />
+        {/* Progress Circle */}
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radius}
+          stroke={getScoreColor()}
+          strokeWidth={strokeWidth}
+          fill="transparent"
+          strokeDasharray={circumference}
+          strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round"
+        />
+      </Svg>
+      <View style={{ position: 'absolute', alignItems: 'center' }}>
+        <Text style={{ fontSize: 36, fontWeight: 'bold', color: getScoreColor() }}>{score}</Text>
+        <Text style={{ fontSize: 12, color: '#6b7280' }}>/ 100</Text>
+      </View>
+    </View>
+  );
+};
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -68,6 +117,47 @@ export default function DashboardScreen() {
         ? weightLogs[0].weight - weightLogs[weightLogs.length - 1].weight 
         : 0;
       
+      // Calculate Daily Fitness Score (out of 100)
+      const dailyGoal = user.dailyCalorieGoal;
+      
+      // 1. Calories goal achieved (40 points)
+      const calorieProgress = Math.min(100, (caloriesConsumed / dailyGoal) * 100);
+      const caloriesScore = Math.min(40, (calorieProgress / 100) * 40);
+      
+      // 2. Exercise completed - minimum 200 cal burned (30 points)
+      const exerciseScore = caloriesBurned >= 200 ? 30 : (caloriesBurned / 200) * 30;
+      
+      // 3. Habit completion (20 points)
+      const habitScore = totalTasks > 0 ? (totalCompleted / totalTasks) * 20 : 0;
+      
+      // 4. Additional healthy actions - check for water or steps habits (10 points)
+      const hasWaterHabit = habitsCompleted > 0 && habits.some((h: any) => 
+        (h.habitName.toLowerCase().includes('water') || h.habitName.toLowerCase().includes('steps')) &&
+        h.completedDates && h.completedDates.includes(today)
+      );
+      const additionalScore = hasWaterHabit ? 10 : 0;
+      
+      // Total fitness score
+      const fitnessScore = Math.round(caloriesScore + exerciseScore + habitScore + additionalScore);
+      
+      // Save today's score to history
+      const scoresStr = await AsyncStorage.getItem('fitness_scores');
+      const allScores = scoresStr ? JSON.parse(scoresStr) : [];
+      
+      // Update or add today's score
+      const existingScoreIndex = allScores.findIndex((s: any) => s.date === today);
+      const scoreEntry = { date: today, score: fitnessScore };
+      
+      if (existingScoreIndex >= 0) {
+        allScores[existingScoreIndex] = scoreEntry;
+      } else {
+        allScores.unshift(scoreEntry);
+      }
+      
+      // Keep only last 90 days
+      const scoresToKeep = allScores.slice(0, 90);
+      await AsyncStorage.setItem('fitness_scores', JSON.stringify(scoresToKeep));
+      
       const dashboardData = {
         caloriesConsumed,
         caloriesBurned,
@@ -78,6 +168,7 @@ export default function DashboardScreen() {
         currentWeight: user.currentWeight,
         goalWeight: user.goalWeight,
         weightChange,
+        fitnessScore,
       };
       
       setDashboard(dashboardData);
@@ -145,6 +236,45 @@ export default function DashboardScreen() {
             <Text style={styles.date}>{new Date().toDateString()}</Text>
           </View>
           <Ionicons name="fitness" size={32} color="#10b981" />
+        </View>
+
+        {/* Daily Fitness Score Card */}
+        <View style={styles.fitnessScoreCard}>
+          <Text style={styles.fitnessScoreTitle}>Daily Fitness Score</Text>
+          <View style={styles.fitnessScoreContent}>
+            <CircularProgress score={dashboard.fitnessScore} />
+            <View style={styles.scoreBreakdown}>
+              <View style={styles.scoreItem}>
+                <View style={[styles.scoreDot, { backgroundColor: '#10b981' }]} />
+                <Text style={styles.scoreLabel}>Calories</Text>
+                <Text style={styles.scorePoints}>40 pts</Text>
+              </View>
+              <View style={styles.scoreItem}>
+                <View style={[styles.scoreDot, { backgroundColor: '#f59e0b' }]} />
+                <Text style={styles.scoreLabel}>Exercise</Text>
+                <Text style={styles.scorePoints}>30 pts</Text>
+              </View>
+              <View style={styles.scoreItem}>
+                <View style={[styles.scoreDot, { backgroundColor: '#8b5cf6' }]} />
+                <Text style={styles.scoreLabel}>Habits</Text>
+                <Text style={styles.scorePoints}>20 pts</Text>
+              </View>
+              <View style={styles.scoreItem}>
+                <View style={[styles.scoreDot, { backgroundColor: '#3b82f6' }]} />
+                <Text style={styles.scoreLabel}>Bonus</Text>
+                <Text style={styles.scorePoints}>10 pts</Text>
+              </View>
+            </View>
+          </View>
+          <Text style={styles.fitnessScoreHint}>
+            {dashboard.fitnessScore >= 80
+              ? '🎯 Excellent! Keep it up!'
+              : dashboard.fitnessScore >= 60
+              ? '💪 Good progress! Almost there!'
+              : dashboard.fitnessScore >= 40
+              ? '🚀 Getting started! Keep pushing!'
+              : '🌱 Every step counts!'}
+          </Text>
         </View>
 
         {/* Calorie Card */}
@@ -298,6 +428,61 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#6b7280',
     marginTop: 4,
+  },
+  fitnessScoreCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  fitnessScoreTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1f2937',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  fitnessScoreContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+  },
+  scoreBreakdown: {
+    flex: 1,
+    marginLeft: 20,
+  },
+  scoreItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scoreDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    marginRight: 8,
+  },
+  scoreLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: '#6b7280',
+  },
+  scorePoints: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  fitnessScoreHint: {
+    fontSize: 14,
+    color: '#6b7280',
+    textAlign: 'center',
+    marginTop: 16,
   },
   card: {
     backgroundColor: '#ffffff',

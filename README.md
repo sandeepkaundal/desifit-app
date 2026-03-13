@@ -168,7 +168,7 @@ Backend APIs have been fully tested with 100% success rate:
 
 ## App Preview
 
-Access the app at: **https://desi-wellness.preview.emergentagent.com**
+Access the app at: **https://health-score-desi.preview.emergentagent.com**
 
 ## Design Principles
 

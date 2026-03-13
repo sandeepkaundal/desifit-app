@@ -75,7 +75,7 @@ const remainingCalories = dailyCalorieGoal - caloriesConsumed + caloriesBurned;
 ## Testing Steps
 
 ### Step 1: Setup Profile
-1. Open app: https://desi-wellness.preview.emergentagent.com
+1. Open app: https://health-score-desi.preview.emergentagent.com
 2. Complete onboarding:
    - Name: Test User
    - Phone: 9876543210
@@ -265,6 +265,6 @@ To check AsyncStorage data:
 
 ---
 
-**App Link**: https://desi-wellness.preview.emergentagent.com
+**App Link**: https://health-score-desi.preview.emergentagent.com
 
 **Last Updated**: March 13, 2026
