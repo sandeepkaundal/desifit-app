@@ -13,49 +13,51 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/authStore';
-import { api } from '../../src/utils/api';
-import { getTodayString, calculateExerciseCalories } from '../../src/utils/helpers';
-import { ExerciseLog } from '../../src/types';
+import { getTodayString } from '../../src/utils/helpers';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
+// Exercise activities with calories per minute
 const ACTIVITIES = [
-  { name: 'Walking', icon: 'walk', color: '#3b82f6' },
-  { name: 'Running', icon: 'flash', color: '#ef4444' },
-  { name: 'Cycling', icon: 'bicycle', color: '#8b5cf6' },
-  { name: 'Yoga', icon: 'fitness', color: '#10b981' },
-  { name: 'Skipping', icon: 'trending-up', color: '#f59e0b' },
-  { name: 'Gym', icon: 'barbell', color: '#6366f1' },
+  { name: 'Walking', icon: 'walk', color: '#3b82f6', caloriesPerMinute: 4.2 },
+  { name: 'Running', icon: 'flash', color: '#ef4444', caloriesPerMinute: 10.0 },
+  { name: 'Cycling', icon: 'bicycle', color: '#8b5cf6', caloriesPerMinute: 8.3 },
+  { name: 'Yoga', icon: 'fitness', color: '#10b981', caloriesPerMinute: 4.2 },
+  { name: 'Skipping', icon: 'trending-up', color: '#f59e0b', caloriesPerMinute: 11.7 },
+  { name: 'Gym', icon: 'barbell', color: '#6366f1', caloriesPerMinute: 6.7 },
 ];
 
 export default function ExerciseScreen() {
   const { user } = useAuthStore();
-  const [exerciseLogs, setExerciseLogs] = useState<ExerciseLog[]>([]);
+  const [exerciseLogs, setExerciseLogs] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState('');
+  const [selectedActivity, setSelectedActivity] = useState<any>(null);
   const [duration, setDuration] = useState('');
 
   useEffect(() => {
-    fetchExerciseLogs();
-  }, [user]);
+    loadExerciseLogs();
+  }, []);
 
-  const fetchExerciseLogs = async () => {
-    if (!user) return;
+  const loadExerciseLogs = async () => {
     try {
-      const data = await api.getExerciseLogs(user.id, getTodayString());
-      setExerciseLogs(data);
+      const logsStr = await AsyncStorage.getItem('exercise_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+      const today = getTodayString();
+      const todayLogs = allLogs.filter((log: any) => log.date === today);
+      setExerciseLogs(todayLogs);
     } catch (error) {
-      console.error('Error fetching exercise logs:', error);
+      console.error('Error loading exercise logs:', error);
     }
   };
 
-  const handleSelectActivity = (activityName: string) => {
-    setSelectedActivity(activityName);
+  const handleSelectActivity = (activity: any) => {
+    setSelectedActivity(activity);
     setDuration('');
     setModalVisible(true);
   };
 
   const handleLogExercise = async () => {
-    if (!user || !selectedActivity) return;
+    if (!selectedActivity) return;
 
     const durationNum = parseInt(duration);
     if (isNaN(durationNum) || durationNum <= 0) {
@@ -63,36 +65,66 @@ export default function ExerciseScreen() {
       return;
     }
 
-    const caloriesBurned = calculateExerciseCalories(selectedActivity, durationNum);
-
     try {
-      await api.logExercise({
-        userId: user.id,
-        activityType: selectedActivity,
-        duration: durationNum,
-        caloriesBurned,
-        date: getTodayString(),
-      });
+      // Calculate: Calories Burned = Calories per minute × Duration
+      const caloriesBurned = selectedActivity.caloriesPerMinute * durationNum;
 
+      const newLog = {
+        id: Date.now().toString(),
+        exerciseName: selectedActivity.name,
+        caloriesPerMinute: selectedActivity.caloriesPerMinute,
+        duration: durationNum,
+        caloriesBurned: caloriesBurned,
+        date: getTodayString(),
+        timestamp: new Date().toISOString(),
+      };
+
+      // Load existing logs
+      const logsStr = await AsyncStorage.getItem('exercise_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+
+      // Add new log
+      allLogs.unshift(newLog);
+
+      // Save back to storage
+      await AsyncStorage.setItem('exercise_logs', JSON.stringify(allLogs));
+
+      // Update UI
+      loadExerciseLogs();
       setModalVisible(false);
-      fetchExerciseLogs();
-      Alert.alert('Success', `Logged ${durationNum} minutes of ${selectedActivity}!`);
+      setDuration('');
+
+      Alert.alert(
+        'Success',
+        `Logged ${durationNum} mins of ${selectedActivity.name} (${Math.round(caloriesBurned)} cal burned)`
+      );
     } catch (error) {
+      console.error('Error logging exercise:', error);
       Alert.alert('Error', 'Failed to log exercise');
     }
   };
 
   const handleDeleteLog = async (logId: string) => {
     try {
-      await api.deleteExerciseLog(logId);
-      fetchExerciseLogs();
+      const logsStr = await AsyncStorage.getItem('exercise_logs');
+      const allLogs = logsStr ? JSON.parse(logsStr) : [];
+
+      // Remove the log
+      const updatedLogs = allLogs.filter((log: any) => log.id !== logId);
+
+      // Save back
+      await AsyncStorage.setItem('exercise_logs', JSON.stringify(updatedLogs));
+
+      // Update UI
+      loadExerciseLogs();
     } catch (error) {
+      console.error('Error deleting log:', error);
       Alert.alert('Error', 'Failed to delete log');
     }
   };
 
-  const totalCalories = exerciseLogs.reduce((sum, log) => sum + log.caloriesBurned, 0);
-  const totalDuration = exerciseLogs.reduce((sum, log) => sum + log.duration, 0);
+  const totalCalories = exerciseLogs.reduce((sum, log) => sum + (log.caloriesBurned || 0), 0);
+  const totalDuration = exerciseLogs.reduce((sum, log) => sum + (log.duration || 0), 0);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -123,10 +155,13 @@ export default function ExerciseScreen() {
             <TouchableOpacity
               key={activity.name}
               style={[styles.activityCard, { borderColor: activity.color }]}
-              onPress={() => handleSelectActivity(activity.name)}
+              onPress={() => handleSelectActivity(activity)}
             >
               <Ionicons name={activity.icon as any} size={32} color={activity.color} />
               <Text style={styles.activityName}>{activity.name}</Text>
+              <Text style={styles.activityRate}>
+                ~{activity.caloriesPerMinute} cal/min
+              </Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -139,9 +174,9 @@ export default function ExerciseScreen() {
           exerciseLogs.map((log) => (
             <View key={log.id} style={styles.logItem}>
               <View style={styles.logInfo}>
-                <Text style={styles.logName}>{log.activityType}</Text>
+                <Text style={styles.logName}>{log.exerciseName}</Text>
                 <Text style={styles.logDetails}>
-                  {log.duration} mins • {Math.round(log.caloriesBurned)} cal burned
+                  {log.duration} mins • {log.caloriesPerMinute} cal/min = {Math.round(log.caloriesBurned)} cal burned
                 </Text>
               </View>
               <TouchableOpacity onPress={() => handleDeleteLog(log.id)}>
@@ -164,21 +199,30 @@ export default function ExerciseScreen() {
           style={styles.modalContainer}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Log {selectedActivity}</Text>
+            <Text style={styles.modalTitle}>Log {selectedActivity?.name}</Text>
+            
+            <View style={styles.infoBox}>
+              <Text style={styles.infoLabel}>Calories per minute:</Text>
+              <Text style={styles.infoValue}>
+                {selectedActivity?.caloriesPerMinute} cal/min
+              </Text>
+            </View>
 
+            <Text style={styles.inputLabel}>Duration (minutes)</Text>
             <TextInput
               style={styles.input}
-              placeholder="Duration (minutes)"
+              placeholder="Enter duration"
               value={duration}
               onChangeText={setDuration}
               keyboardType="numeric"
             />
 
-            {duration && (
-              <Text style={styles.estimateText}>
-                Estimated: ~{calculateExerciseCalories(selectedActivity, parseInt(duration) || 0)} calories
+            <View style={styles.calculationBox}>
+              <Text style={styles.calculationLabel}>Calories Burned:</Text>
+              <Text style={styles.calculationValue}>
+                {selectedActivity?.caloriesPerMinute} × {duration || 0} = {Math.round((selectedActivity?.caloriesPerMinute || 0) * parseFloat(duration || '0'))} cal
               </Text>
-            )}
+            </View>
 
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -277,6 +321,11 @@ const styles = StyleSheet.create({
     color: '#1f2937',
     marginTop: 8,
   },
+  activityRate: {
+    fontSize: 12,
+    color: '#6b7280',
+    marginTop: 4,
+  },
   emptyText: {
     fontSize: 14,
     color: '#6b7280',
@@ -301,7 +350,7 @@ const styles = StyleSheet.create({
     color: '#1f2937',
   },
   logDetails: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6b7280',
     marginTop: 4,
   },
@@ -315,13 +364,37 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     padding: 24,
-    minHeight: 300,
+    minHeight: 400,
   },
   modalTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     color: '#1f2937',
-    marginBottom: 24,
+    marginBottom: 16,
+  },
+  infoBox: {
+    backgroundColor: '#f0f9ff',
+    padding: 12,
+    borderRadius: 12,
+    marginBottom: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  infoLabel: {
+    fontSize: 14,
+    color: '#0369a1',
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#0284c7',
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#374151',
+    marginBottom: 8,
   },
   input: {
     backgroundColor: '#f3f4f6',
@@ -332,12 +405,24 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#e5e7eb',
   },
-  estimateText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10b981',
-    textAlign: 'center',
+  calculationBox: {
+    backgroundColor: '#fef3c7',
+    padding: 16,
+    borderRadius: 12,
     marginBottom: 24,
+    borderWidth: 2,
+    borderColor: '#f59e0b',
+  },
+  calculationLabel: {
+    fontSize: 14,
+    color: '#b45309',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  calculationValue: {
+    fontSize: 18,
+    color: '#92400e',
+    fontWeight: 'bold',
   },
   modalButtons: {
     flexDirection: 'row',

@@ -10,11 +10,9 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useAuthStore } from '../../src/store/authStore';
-import { api } from '../../src/utils/api';
 import { getTodayString } from '../../src/utils/helpers';
-import { Habit } from '../../src/types';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const DEFAULT_HABITS = [
   { name: 'Drink Water', icon: 'water' },
@@ -25,29 +23,69 @@ const DEFAULT_HABITS = [
   { name: 'Sleep Early', icon: 'moon' },
 ];
 
+const calculateStreaks = (completedDates: string[]): { current: number; longest: number } => {
+  if (completedDates.length === 0) return { current: 0, longest: 0 };
+
+  const sorted = completedDates.sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+  const today = getTodayString();
+  
+  // Calculate current streak
+  let currentStreak = 0;
+  const todayDate = new Date(today);
+  
+  for (let i = 0; i < sorted.length; i++) {
+    const expectedDate = new Date(todayDate);
+    expectedDate.setDate(todayDate.getDate() - i);
+    const expectedStr = expectedDate.toISOString().split('T')[0];
+    
+    if (sorted[i] === expectedStr) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+  
+  // Calculate longest streak
+  let longestStreak = 1;
+  let tempStreak = 1;
+  
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const date1 = new Date(sorted[i]);
+    const date2 = new Date(sorted[i + 1]);
+    const diff = Math.abs(date1.getTime() - date2.getTime());
+    const diffDays = Math.ceil(diff / (1000 * 3600 * 24));
+    
+    if (diffDays === 1) {
+      tempStreak++;
+      longestStreak = Math.max(longestStreak, tempStreak);
+    } else {
+      tempStreak = 1;
+    }
+  }
+  
+  return { current: currentStreak, longest: longestStreak };
+};
+
 export default function HabitsScreen() {
-  const { user } = useAuthStore();
-  const [habits, setHabits] = useState<Habit[]>([]);
+  const [habits, setHabits] = useState<any[]>([]);
   const [modalVisible, setModalVisible] = useState(false);
   const [customHabit, setCustomHabit] = useState('');
 
   useEffect(() => {
-    fetchHabits();
-  }, [user]);
+    loadHabits();
+  }, []);
 
-  const fetchHabits = async () => {
-    if (!user) return;
+  const loadHabits = async () => {
     try {
-      const data = await api.getHabits(user.id);
-      setHabits(data);
+      const habitsStr = await AsyncStorage.getItem('habits');
+      const loadedHabits = habitsStr ? JSON.parse(habitsStr) : [];
+      setHabits(loadedHabits);
     } catch (error) {
-      console.error('Error fetching habits:', error);
+      console.error('Error loading habits:', error);
     }
   };
 
   const handleAddHabit = async (habitName: string) => {
-    if (!user) return;
-    
     // Check if habit already exists
     if (habits.find(h => h.habitName === habitName)) {
       Alert.alert('Info', 'This habit already exists!');
@@ -55,38 +93,60 @@ export default function HabitsScreen() {
     }
 
     try {
-      await api.createHabit({
-        userId: user.id,
+      const newHabit = {
+        id: Date.now().toString(),
         habitName,
-      });
-      fetchHabits();
+        completedDates: [],
+        currentStreak: 0,
+        longestStreak: 0,
+      };
+
+      const updatedHabits = [...habits, newHabit];
+      await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
+      
+      setHabits(updatedHabits);
       setModalVisible(false);
       setCustomHabit('');
     } catch (error) {
+      console.error('Error adding habit:', error);
       Alert.alert('Error', 'Failed to add habit');
     }
   };
 
-  const handleToggleHabit = async (habit: Habit) => {
-    if (!user) return;
-
+  const handleToggleHabit = async (habit: any) => {
     const today = getTodayString();
     const isCompleted = habit.completedDates.includes(today);
 
     try {
-      await api.toggleHabit({
-        userId: user.id,
-        habitName: habit.habitName,
-        date: today,
-        completed: !isCompleted,
-      });
-      fetchHabits();
+      let updatedDates;
+      if (isCompleted) {
+        updatedDates = habit.completedDates.filter((d: string) => d !== today);
+      } else {
+        updatedDates = [...habit.completedDates, today];
+      }
+
+      const streaks = calculateStreaks(updatedDates);
+
+      const updatedHabit = {
+        ...habit,
+        completedDates: updatedDates,
+        currentStreak: streaks.current,
+        longestStreak: streaks.longest,
+      };
+
+      const updatedHabits = habits.map(h => 
+        h.id === habit.id ? updatedHabit : h
+      );
+
+      await AsyncStorage.setItem('habits', JSON.stringify(updatedHabits));
+      setHabits(updatedHabits);
     } catch (error) {
+      console.error('Error toggling habit:', error);
       Alert.alert('Error', 'Failed to update habit');
     }
   };
 
-  const isHabitCompletedToday = (habit: Habit) => {
+  const isHabitCompletedToday = (habit: any) => {
     return habit.completedDates.includes(getTodayString());
   };
 
