@@ -376,25 +376,21 @@ export default function HabitsScreen() {
               {todos.filter(t => !t.completed).map((todo) => (
                 <View key={todo.id} style={styles.todoCard}>
                   <TouchableOpacity
-                    style={styles.todoLeft}
+                    style={styles.todoLeftContent}
                     onPress={() => handleToggleTodo(todo)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.todoCheckbox}>
                       <Ionicons name="square-outline" size={24} color="#6b7280" />
                     </View>
-                    <Text style={styles.todoName}>{todo.taskName}</Text>
+                    <Text style={styles.todoName} numberOfLines={2}>{todo.taskName}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.todoDeleteButton}
-                    onPress={() => {
-                      console.log('Delete button pressed for todo:', todo.id);
-                      handleDeleteTodo(todo.id);
-                    }}
-                    activeOpacity={0.6}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.todoDeleteBtn}
+                    onPress={() => handleDeleteTodo(todo.id)}
+                    activeOpacity={0.5}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    <Ionicons name="trash-outline" size={22} color="#ef4444" />
                   </TouchableOpacity>
                 </View>
               ))}
@@ -406,22 +402,21 @@ export default function HabitsScreen() {
                   {todos.filter(t => t.completed).map((todo) => (
                     <View key={todo.id} style={styles.todoCardCompleted}>
                       <TouchableOpacity
-                        style={styles.todoLeft}
+                        style={styles.todoLeftContent}
                         onPress={() => handleToggleTodo(todo)}
                         activeOpacity={0.7}
                       >
                         <View style={styles.todoCheckbox}>
                           <Ionicons name="checkmark-square" size={24} color="#10b981" />
                         </View>
-                        <Text style={styles.todoNameCompleted}>{todo.taskName}</Text>
+                        <Text style={styles.todoNameCompleted} numberOfLines={2}>{todo.taskName}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.todoDeleteButton}
+                        style={styles.todoDeleteBtn}
                         onPress={() => handleDeleteTodo(todo.id)}
-                        activeOpacity={0.6}
-                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        activeOpacity={0.5}
                       >
-                        <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                        <Ionicons name="trash-outline" size={22} color="#ef4444" />
                       </TouchableOpacity>
                     </View>
                   ))}
@@ -652,6 +647,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    gap: 12,
   },
   todoCardCompleted: {
     flexDirection: 'row',
@@ -663,6 +659,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderWidth: 1,
     borderColor: '#e5e7eb',
+    gap: 12,
+  },
+  todoLeftContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   todoLeft: {
     flexDirection: 'row',
@@ -682,6 +685,15 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textDecorationLine: 'line-through',
     flex: 1,
+  },
+  todoDeleteBtn: {
+    padding: 12,
+    backgroundColor: '#fee2e2',
+    borderRadius: 10,
+    minWidth: 44,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   todoDeleteButton: {
     padding: 8,
