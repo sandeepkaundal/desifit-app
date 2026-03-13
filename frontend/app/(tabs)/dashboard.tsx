@@ -29,7 +29,7 @@ export default function DashboardScreen() {
       const foodLogsStr = await AsyncStorage.getItem('food_logs');
       const allFoodLogs = foodLogsStr ? JSON.parse(foodLogsStr) : [];
       const todayFoodLogs = allFoodLogs.filter((log: any) => log.date === today);
-      const caloriesConsumed = todayFoodLogs.reduce((sum: number, log: any) => sum + (log.calories || 0), 0);
+      const caloriesConsumed = todayFoodLogs.reduce((sum: number, log: any) => sum + (log.totalCalories || 0), 0);
       
       // Get exercise logs
       const exerciseLogsStr = await AsyncStorage.getItem('exercise_logs');
