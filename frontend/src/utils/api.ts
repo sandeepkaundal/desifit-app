@@ -1,7 +1,9 @@
 import Constants from 'expo-constants';
 
-const BACKEND_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BACKEND_URL = Constants.expoConfig?.extra?.EXPO_PUBLIC_BACKEND_URL || process.env.EXPO_PUBLIC_BACKEND_URL || 'https://desi-wellness.preview.emergentagent.com';
 const API_BASE = `${BACKEND_URL}/api`;
+
+console.log('API Configuration:', { BACKEND_URL, API_BASE });
 
 export const api = {
   // Auth
