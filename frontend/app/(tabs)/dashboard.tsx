@@ -5,29 +5,68 @@ import {
   StyleSheet,
   ScrollView,
   RefreshControl,
-  TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuthStore } from '../../src/store/authStore';
-import { api } from '../../src/utils/api';
 import { getTodayString } from '../../src/utils/helpers';
-import { Dashboard } from '../../src/types';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
-  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [dashboard, setDashboard] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchDashboard = async () => {
+  const fetchLocalData = async () => {
     if (!user) return;
+    
     try {
-      const data = await api.getDashboard(user.id, getTodayString());
-      setDashboard(data);
+      const today = getTodayString();
+      
+      // Get food logs
+      const foodLogsStr = await AsyncStorage.getItem('food_logs');
+      const allFoodLogs = foodLogsStr ? JSON.parse(foodLogsStr) : [];
+      const todayFoodLogs = allFoodLogs.filter((log: any) => log.date === today);
+      const caloriesConsumed = todayFoodLogs.reduce((sum: number, log: any) => sum + (log.calories || 0), 0);
+      
+      // Get exercise logs
+      const exerciseLogsStr = await AsyncStorage.getItem('exercise_logs');
+      const allExerciseLogs = exerciseLogsStr ? JSON.parse(exerciseLogsStr) : [];
+      const todayExerciseLogs = allExerciseLogs.filter((log: any) => log.date === today);
+      const caloriesBurned = todayExerciseLogs.reduce((sum: number, log: any) => sum + (log.caloriesBurned || 0), 0);
+      
+      // Get habits
+      const habitsStr = await AsyncStorage.getItem('habits');
+      const habits = habitsStr ? JSON.parse(habitsStr) : [];
+      const totalHabits = habits.length;
+      const habitsCompleted = habits.filter((habit: any) => 
+        habit.completedDates && habit.completedDates.includes(today)
+      ).length;
+      
+      // Get weight logs
+      const weightLogsStr = await AsyncStorage.getItem('weight_logs');
+      const weightLogs = weightLogsStr ? JSON.parse(weightLogsStr) : [];
+      const weightChange = weightLogs.length > 1 
+        ? weightLogs[0].weight - weightLogs[weightLogs.length - 1].weight 
+        : 0;
+      
+      const dashboardData = {
+        caloriesConsumed,
+        caloriesBurned,
+        dailyCalorieGoal: user.dailyCalorieGoal,
+        remainingCalories: user.dailyCalorieGoal - caloriesConsumed + caloriesBurned,
+        habitsCompleted,
+        totalHabits,
+        currentWeight: user.currentWeight,
+        goalWeight: user.goalWeight,
+        weightChange,
+      };
+      
+      setDashboard(dashboardData);
     } catch (error) {
-      console.error('Error fetching dashboard:', error);
+      console.error('Error loading dashboard:', error);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -35,12 +74,12 @@ export default function DashboardScreen() {
   };
 
   useEffect(() => {
-    fetchDashboard();
+    fetchLocalData();
   }, [user]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    fetchDashboard();
+    fetchLocalData();
   }, [user]);
 
   if (loading) {
@@ -51,7 +90,7 @@ export default function DashboardScreen() {
     );
   }
 
-  if (!dashboard) {
+  if (!dashboard || !user) {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.errorText}>Unable to load dashboard</Text>
@@ -79,7 +118,7 @@ export default function DashboardScreen() {
       >
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Hello, {user?.name}!</Text>
+            <Text style={styles.greeting}>Hello, {user.name}!</Text>
             <Text style={styles.date}>{new Date().toDateString()}</Text>
           </View>
           <Ionicons name="fitness" size={32} color="#10b981" />
@@ -156,6 +195,8 @@ export default function DashboardScreen() {
           <Text style={styles.habitText}>
             {dashboard.habitsCompleted === dashboard.totalHabits && dashboard.totalHabits > 0
               ? '🎉 All habits completed today!'
+              : dashboard.totalHabits === 0
+              ? 'Add habits in the Habits tab'
               : `Keep going! ${dashboard.totalHabits - dashboard.habitsCompleted} habits left`}
           </Text>
         </View>
@@ -191,6 +232,10 @@ export default function DashboardScreen() {
               </Text>
             </View>
           </View>
+        </View>
+
+        <View style={styles.footerNote}>
+          <Text style={styles.footerText}>All data stored locally on your device</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -344,5 +389,14 @@ const styles = StyleSheet.create({
   },
   weightGain: {
     color: '#ef4444',
+  },
+  footerNote: {
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 24,
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#9ca3af',
   },
 });
