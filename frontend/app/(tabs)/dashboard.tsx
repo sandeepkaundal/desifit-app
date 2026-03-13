@@ -12,6 +12,7 @@ import { useAuthStore } from '../../src/store/authStore';
 import { getTodayString } from '../../src/utils/helpers';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function DashboardScreen() {
   const { user } = useAuthStore();
@@ -76,6 +77,13 @@ export default function DashboardScreen() {
   useEffect(() => {
     fetchLocalData();
   }, [user]);
+
+  // Auto-reload when dashboard tab becomes active
+  useFocusEffect(
+    useCallback(() => {
+      fetchLocalData();
+    }, [user])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
