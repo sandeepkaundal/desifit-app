@@ -302,6 +302,7 @@ export default function HabitsScreen() {
                       isCompleted && styles.habitCardCompleted,
                     ]}
                     onPress={() => handleToggleHabit(habit)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.habitLeft}>
                       <View
@@ -336,9 +337,14 @@ export default function HabitsScreen() {
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={styles.deleteButton}
-                    onPress={() => handleDeleteHabit(habit.id)}
+                    onPress={() => {
+                      console.log('Delete button pressed for habit:', habit.id);
+                      handleDeleteHabit(habit.id);
+                    }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="trash-outline" size={20} color="#ef4444" />
+                    <Ionicons name="trash-outline" size={22} color="#ef4444" />
                   </TouchableOpacity>
                 </View>
               );
@@ -372,13 +378,22 @@ export default function HabitsScreen() {
                   <TouchableOpacity
                     style={styles.todoLeft}
                     onPress={() => handleToggleTodo(todo)}
+                    activeOpacity={0.7}
                   >
                     <View style={styles.todoCheckbox}>
                       <Ionicons name="square-outline" size={24} color="#6b7280" />
                     </View>
                     <Text style={styles.todoName}>{todo.taskName}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={() => handleDeleteTodo(todo.id)}>
+                  <TouchableOpacity
+                    style={styles.todoDeleteButton}
+                    onPress={() => {
+                      console.log('Delete button pressed for todo:', todo.id);
+                      handleDeleteTodo(todo.id);
+                    }}
+                    activeOpacity={0.6}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
                     <Ionicons name="trash-outline" size={20} color="#ef4444" />
                   </TouchableOpacity>
                 </View>
@@ -393,13 +408,19 @@ export default function HabitsScreen() {
                       <TouchableOpacity
                         style={styles.todoLeft}
                         onPress={() => handleToggleTodo(todo)}
+                        activeOpacity={0.7}
                       >
                         <View style={styles.todoCheckbox}>
                           <Ionicons name="checkmark-square" size={24} color="#10b981" />
                         </View>
                         <Text style={styles.todoNameCompleted}>{todo.taskName}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity onPress={() => handleDeleteTodo(todo.id)}>
+                      <TouchableOpacity
+                        style={styles.todoDeleteButton}
+                        onPress={() => handleDeleteTodo(todo.id)}
+                        activeOpacity={0.6}
+                        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      >
                         <Ionicons name="trash-outline" size={20} color="#ef4444" />
                       </TouchableOpacity>
                     </View>
@@ -571,9 +592,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
   },
   deleteButton: {
-    padding: 8,
+    padding: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#fee2e2',
+    borderRadius: 12,
+    minWidth: 44,
+    minHeight: 44,
   },
   habitLeft: {
     flexDirection: 'row',
@@ -657,6 +682,9 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     textDecorationLine: 'line-through',
     flex: 1,
+  },
+  todoDeleteButton: {
+    padding: 8,
   },
   completedHeader: {
     fontSize: 14,
