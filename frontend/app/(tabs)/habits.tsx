@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Pressable,
   Modal,
   TextInput,
   Alert,
@@ -385,13 +386,15 @@ export default function HabitsScreen() {
                     </View>
                     <Text style={styles.todoName} numberOfLines={2}>{todo.taskName}</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.todoDeleteBtn}
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.todoDeleteBtn,
+                      pressed && { opacity: 0.6, transform: [{ scale: 0.95 }] }
+                    ]}
                     onPress={() => handleDeleteTodo(todo.id)}
-                    activeOpacity={0.5}
                   >
                     <Ionicons name="trash-outline" size={22} color="#ef4444" />
-                  </TouchableOpacity>
+                  </Pressable>
                 </View>
               ))}
 
@@ -411,13 +414,15 @@ export default function HabitsScreen() {
                         </View>
                         <Text style={styles.todoNameCompleted} numberOfLines={2}>{todo.taskName}</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.todoDeleteBtn}
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.todoDeleteBtn,
+                          pressed && { opacity: 0.6, transform: [{ scale: 0.95 }] }
+                        ]}
                         onPress={() => handleDeleteTodo(todo.id)}
-                        activeOpacity={0.5}
                       >
                         <Ionicons name="trash-outline" size={22} color="#ef4444" />
-                      </TouchableOpacity>
+                      </Pressable>
                     </View>
                   ))}
                 </>
